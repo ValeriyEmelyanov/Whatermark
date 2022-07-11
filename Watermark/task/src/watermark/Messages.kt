@@ -10,7 +10,7 @@ enum class Messages(
         "The number of image color components isn't 3.",
         "The image isn't 24 or 32-bit."
     ),
-    WHATERMARK(
+    WATERMARK(
         "Input the watermark image filename:",
         "The number of watermark color components isn't 3.",
         "The watermark isn't 24 or 32-bit."
