@@ -14,20 +14,17 @@ const val BIT_PER_PIXEL_32 = 32
 fun main() {
     val image = getImage(Messages.IMAGE)
     val watermark = getImage(Messages.WATERMARK)
-
-    if (image.width != watermark.width || image.height != watermark.height) {
-        println("The image and watermark dimensions are different.")
-        exitProcess(-1)
-    }
+    checkImageSizes(image, watermark)
 
     val useAlpha = checkUsingAlpha(watermark)
-    val watermarkTranspPercentage = getwatermarkTranspPercentage()
+    val transColor = getTransColor(watermark)
+    val watermarkTranspPercentage = getWatermarkTranspPercentage()
+
     val outputFilename = getOutputFilename()
 
-    val resultImage = blendImages(image, watermark, watermarkTranspPercentage, useAlpha)
+    val resultImage = blendImages(image, watermark, watermarkTranspPercentage, useAlpha, transColor)
 
     saveImage(resultImage, outputFilename)
-    println("The watermarked image $outputFilename has been created.")
 }
 
 fun getImage(messages: Messages): BufferedImage {
@@ -43,7 +40,8 @@ fun getImage(messages: Messages): BufferedImage {
     val image = ImageIO.read(file)
 
     if (image.colorModel.numComponents != NUMBER_OF_COLOR_COMPONENTS &&
-        image.colorModel.numComponents != NUMBER_OF_COLOR_COMPONENTS + if (messages == Messages.WATERMARK) 1 else 0 ) {
+        image.colorModel.numComponents != NUMBER_OF_COLOR_COMPONENTS + if (messages == Messages.WATERMARK) 1 else 0
+    ) {
         println(messages.wrongImageColorComponentsNumber)
         exitProcess(-1)
     }
@@ -55,7 +53,41 @@ fun getImage(messages: Messages): BufferedImage {
     return image
 }
 
-fun getwatermarkTranspPercentage(): Int {
+fun checkImageSizes(image1: BufferedImage, image2: BufferedImage) {
+    if (image1.width != image2.width || image1.height != image2.height) {
+        println("The image and watermark dimensions are different.")
+        exitProcess(-1)
+    }
+}
+
+fun checkUsingAlpha(watermark: BufferedImage): Boolean {
+    if (watermark.transparency == Transparency.TRANSLUCENT) {
+        println("Do you want to use the watermark's Alpha channel?")
+        val answer = readln()
+        return answer.lowercase() == "yes"
+    }
+    return false
+}
+
+fun getTransColor(watermark: BufferedImage): Pair<Boolean, Color> {
+    if (watermark.transparency == Transparency.TRANSLUCENT) return Pair(false, Color.WHITE)
+
+    println("Do you want to set a transparency color?")
+    val answer = readln()
+    if (answer.lowercase() != "yes") return Pair(false, Color.WHITE)
+
+    println("Input a transparency color ([Red] [Green] [Blue]):")
+    try {
+        val rgb = readln().split(" ").map { s -> s.toInt() }
+        if (rgb.size != 3) throw IllegalArgumentException()
+        return Pair((true), Color(rgb[0], rgb[1], rgb[2]))
+    } catch (e: Exception) {
+        println("The transparency color input is invalid.")
+        exitProcess(-1)
+    }
+}
+
+fun getWatermarkTranspPercentage(): Int {
     println("Input the watermark transparency percentage (Integer 0-100):")
     val sPercentage = readln()
     if (!sPercentage.matches(Regex("""\d+"""))) {
@@ -84,7 +116,13 @@ fun getOutputFilename(): String {
     return filename
 }
 
-fun blendImages(image: BufferedImage, watermark: BufferedImage, weight: Int, useAlpha: Boolean): BufferedImage {
+fun blendImages(
+    image: BufferedImage,
+    watermark: BufferedImage,
+    weight: Int,
+    useAlpha: Boolean,
+    transColor: Pair<Boolean, Color>
+): BufferedImage {
     val result = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB)
 
     for (x in 0 until image.width) {
@@ -92,10 +130,12 @@ fun blendImages(image: BufferedImage, watermark: BufferedImage, weight: Int, use
             val i = Color(image.getRGB(x, y))
             val w = if (useAlpha) Color(watermark.getRGB(x, y), true) else Color(watermark.getRGB(x, y))
 
-            val color = if (useAlpha && w.alpha == 0) i else Color(
-                (weight * w.red + (100 - weight) * i.red) / 100,
-                (weight * w.green + (100 - weight) * i.green) / 100,
-                (weight * w.blue + (100 - weight) * i.blue) / 100
+            val color = if (useAlpha && w.alpha == 0 ||
+                transColor.first && transColor.second == w
+            ) i else Color(
+                mixColors(w.red, i.red, weight),
+                mixColors(w.green, i.green, weight),
+                mixColors(w.blue, i.blue, weight)
             )
             result.setRGB(x, y, color.rgb)
         }
@@ -104,19 +144,14 @@ fun blendImages(image: BufferedImage, watermark: BufferedImage, weight: Int, use
     return result
 }
 
-fun checkUsingAlpha(watermark: BufferedImage): Boolean  {
-    if (watermark.transparency == Transparency.TRANSLUCENT) {
-        println("Do you want to use the watermark's Alpha channel?")
-        val answer = readln()
-        return answer.lowercase() == "yes"
-    }
-    return false
-}
+fun mixColors(wColor: Int, iColor: Int, weight: Int): Int =
+    (weight * wColor + (100 - weight) * iColor) / 100
 
-fun saveImage(resultImage: BufferedImage, outputFilename: String): Unit {
+fun saveImage(resultImage: BufferedImage, outputFilename: String) {
     try {
         val outputFile = File(outputFilename)
         ImageIO.write(resultImage, outputFile.extension, outputFile)
+        println("The watermarked image $outputFilename has been created.")
     } catch (e: Exception) {
         println("Can't write output file!")
         exitProcess(-1)
