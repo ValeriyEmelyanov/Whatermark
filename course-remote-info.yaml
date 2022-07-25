@@ -3,7 +3,7 @@ hyperskill_project:
   ide_files: https://stepik.org/media/attachments/lesson/623865/additional_files.json
   is_template_based: false
   use_ide: true
-update_date: Mon, 18 Jul 2022 05:12:19 UTC
+update_date: Mon, 25 Jul 2022 13:34:28 UTC
 stages:
 - id: 1112
   step: 17145
@@ -19,7 +19,7 @@ stages:
   is_completed: true
 - id: 1116
   step: 17149
-  is_completed: false
+  is_completed: true
 topics:
   0:
   - title: Binary numbers
@@ -165,6 +165,8 @@ topics:
     theory_id: 15090
   - title: Pseudocode basics
     theory_id: 19510
+  - title: Complex constructions in pseudocode
+    theory_id: 20922
   - title: Stack
     theory_id: 5252
   - title: Call stack

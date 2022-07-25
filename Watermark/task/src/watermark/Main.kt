@@ -3,59 +3,70 @@ package watermark
 import java.awt.Color
 import java.awt.Transparency
 import java.awt.image.BufferedImage
-import java.io.File
-import javax.imageio.ImageIO
 import kotlin.system.exitProcess
 
-const val NUMBER_OF_COLOR_COMPONENTS = 3
-const val BIT_PER_PIXEL_24 = 24
-const val BIT_PER_PIXEL_32 = 32
-
 fun main() {
-    val image = getImage(Messages.IMAGE)
-    val watermark = getImage(Messages.WATERMARK)
+    val image = ImageReader.readFromFile(Messages.IMAGE)
+    val watermark = ImageReader.readFromFile(Messages.WATERMARK)
     checkImageSizes(image, watermark)
 
     val useAlpha = checkUsingAlpha(watermark)
     val transColor = getTransColor(watermark)
     val watermarkTranspPercentage = getWatermarkTranspPercentage()
 
+    val positionMethod = getPositionMethod()
+    val position = getPosition(positionMethod, image, watermark)
+
     val outputFilename = getOutputFilename()
 
-    val resultImage = blendImages(image, watermark, watermarkTranspPercentage, useAlpha, transColor)
+    val resultImage = ImageBlender.Builder()
+        .image(image)
+        .watermark(watermark)
+        .weight(watermarkTranspPercentage)
+        .useAlpha(useAlpha)
+        .transColor(transColor)
+        .positionMethod(positionMethod)
+        .position(position)
+        .build()
+        .blendImages()
 
-    saveImage(resultImage, outputFilename)
+    ImageSaver.save(resultImage, outputFilename)
 }
 
-fun getImage(messages: Messages): BufferedImage {
-    println(messages.askInputName)
-    val filename = readln().trim()
-
-    val file = File(filename)
-    if (!file.exists()) {
-        println("The file $filename doesn't exist.")
+fun checkImageSizes(image: BufferedImage, watermark: BufferedImage) {
+    if (watermark.width > image.width || watermark.height > image.height) {
+        println("The watermark's dimensions are larger.")
         exitProcess(-1)
     }
-
-    val image = ImageIO.read(file)
-
-    if (image.colorModel.numComponents != NUMBER_OF_COLOR_COMPONENTS &&
-        image.colorModel.numComponents != NUMBER_OF_COLOR_COMPONENTS + if (messages == Messages.WATERMARK) 1 else 0
-    ) {
-        println(messages.wrongImageColorComponentsNumber)
-        exitProcess(-1)
-    }
-    if (image.colorModel.pixelSize != BIT_PER_PIXEL_24 && image.colorModel.pixelSize != BIT_PER_PIXEL_32) {
-        println(messages.thisIsNot24Or32Bit)
-        exitProcess(-1)
-    }
-
-    return image
 }
 
-fun checkImageSizes(image1: BufferedImage, image2: BufferedImage) {
-    if (image1.width != image2.width || image1.height != image2.height) {
-        println("The image and watermark dimensions are different.")
+fun getPositionMethod(): PositionMethod {
+    println("Choose the position method (single, grid):")
+    val answer = readln()
+    try {
+        return PositionMethod.valueOf(answer.uppercase())
+    } catch (e: Exception) {
+        println("The position method input is invalid.")
+        exitProcess(-1)
+    }
+}
+
+fun getPosition(positionMethod: PositionMethod, image: BufferedImage, watermark: BufferedImage): Pair<Int, Int> {
+    if (positionMethod == PositionMethod.GRID) return Pair(0, 0)
+
+    val diffX = image.width - watermark.width
+    val diffY = image.height - watermark.height
+    println("Input the watermark position ([x 0-$diffX] [y 0-$diffY]):")
+    try {
+        val (x, y) = readln().split(' ').map { n -> n.toInt() }
+
+        if (x < 0 || x > diffX || y < 0 || y > diffY) {
+            println("The position input is out of range.")
+            exitProcess(-1)
+        }
+        return Pair(x, y)
+    } catch (e: Exception) {
+        println("The position input is invalid.")
         exitProcess(-1)
     }
 }
@@ -114,46 +125,4 @@ fun getOutputFilename(): String {
     }
 
     return filename
-}
-
-fun blendImages(
-    image: BufferedImage,
-    watermark: BufferedImage,
-    weight: Int,
-    useAlpha: Boolean,
-    transColor: Pair<Boolean, Color>
-): BufferedImage {
-    val result = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB)
-
-    for (x in 0 until image.width) {
-        for (y in 0 until image.height) {
-            val i = Color(image.getRGB(x, y))
-            val w = if (useAlpha) Color(watermark.getRGB(x, y), true) else Color(watermark.getRGB(x, y))
-
-            val color = if (useAlpha && w.alpha == 0 ||
-                transColor.first && transColor.second == w
-            ) i else Color(
-                mixColors(w.red, i.red, weight),
-                mixColors(w.green, i.green, weight),
-                mixColors(w.blue, i.blue, weight)
-            )
-            result.setRGB(x, y, color.rgb)
-        }
-    }
-
-    return result
-}
-
-fun mixColors(wColor: Int, iColor: Int, weight: Int): Int =
-    (weight * wColor + (100 - weight) * iColor) / 100
-
-fun saveImage(resultImage: BufferedImage, outputFilename: String) {
-    try {
-        val outputFile = File(outputFilename)
-        ImageIO.write(resultImage, outputFile.extension, outputFile)
-        println("The watermarked image $outputFilename has been created.")
-    } catch (e: Exception) {
-        println("Can't write output file!")
-        exitProcess(-1)
-    }
 }
